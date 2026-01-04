@@ -55,20 +55,19 @@
     <canvas id="glCanvas"></canvas>
 
     <script id="vertex-shader" type="x-shader/x-vertex">
-          #version 300 es
+      #version 300 es
 
-          // Layout locations must match the Mesh class
-          in vec3 a_position;
-          in vec3 a_normal;
-          in vec2 a_uv;
+      in vec3 a_position;
+      in vec3 a_normal;
+      in vec2 a_uv;
 
-          uniform mat4 u_model;      // Model Matrix (Local -> World)
-      uniform mat4 u_view;       // View Matrix (World -> Camera)
-      uniform mat4 u_projection; // Projection Matrix
+      uniform mat4 u_model;
+      uniform mat4 u_view;
+      uniform mat4 u_projection;
 
       out vec3 v_normal;
       out vec3 v_fragPos; // World position of the vertex
-       out vec2 v_uv;
+      out vec2 v_uv;
 
       void main() {
           vec4 worldPos = u_model * vec4(a_position, 1.0);
@@ -159,13 +158,13 @@
           vec3 viewDir = normalize(u_viewPos - v_fragPos);
           vec3 texColor = vec3(texture(u_texture, v_uv));
 
-          // 1. Ambient (Base)
+          // Ambient
           vec3 result = u_ambientColor * texColor;
 
-          // 2. Directional Light
+          // Directional Light
           result += CalcDirLight(u_dirLight, norm, viewDir, texColor);
 
-          // 3. Point Lights (Loop)
+          // Point Lights
           for(int i = 0; i < MAX_POINT_LIGHTS; i++) {
               if(i >= u_numPointLights) break;
               result += CalcPointLight(u_pointLights[i], norm, v_fragPos, viewDir, texColor);

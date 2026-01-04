@@ -1,9 +1,3 @@
-/**
- * Creates and compiles a shader.
- * @param {WebGL2RenderingContext} gl The WebGL Context.
- * @param {string} shaderSource The GLSL source code.
- * @param {number} shaderType The type of shader (VERTEX_SHADER or FRAGMENT_SHADER).
- */
 function compileShader(gl, shaderSource, shaderType) {
   const shader = gl.createShader(shaderType);
   gl.shaderSource(shader, shaderSource);
@@ -19,9 +13,6 @@ function compileShader(gl, shaderSource, shaderType) {
   return shader;
 }
 
-/**
- * Creates a program from 2 shaders.
- */
 function createProgram(gl, vertexShaderSource, fragmentShaderSource) {
   const vertexShader = compileShader(gl, vertexShaderSource, gl.VERTEX_SHADER);
   const fragmentShader = compileShader(

@@ -1,10 +1,4 @@
 class ObjLoader {
-  /**
-   * Loads an OBJ file from a URL and returns a Mesh.
-   * @param {WebGL2RenderingContext} gl
-   * @param {string} url
-   * @returns {Promise<Mesh>}
-   */
   static async load(gl, url) {
     const response = await fetch(url);
     if (!response.ok) {
@@ -14,12 +8,7 @@ class ObjLoader {
     return this.parse(gl, text);
   }
 
-  /**
-   * Parses OBJ text data and creates a Mesh.
-   * @param {WebGL2RenderingContext} gl
-   * @param {string} text
-   * @returns {Mesh}
-   */
+  // Parses OBJ text data and creates a Mesh.
   static parse(gl, text) {
     // Raw data from the file
     const rawPositions = [];
@@ -32,7 +21,7 @@ class ObjLoader {
     const webglUVs = [];
     const indices = [];
 
-    // Cache to avoid duplicating vertices (maps "v/vt/vn" string to index)
+    // Cache to avoid duplicating vertices (maps v/vt/vn string to index)
     const vertexCache = new Map();
     let nextIndex = 0;
 
@@ -63,13 +52,12 @@ class ObjLoader {
         // Texture Coord: vt 0.5 0.5
         rawUVs.push([parseFloat(parts[1]), parseFloat(parts[2])]);
       } else if (type === "f") {
-        // Face: f v1/vt1/vn1 v2/vt2/vn2 v3/vt3/vn3 ...
-        // Triangulate generic polygons (fan triangulation)
+        // Triangulate generic polygons
         const faceVerts = parts.slice(1);
         const triangleCount = faceVerts.length - 2;
 
         for (let i = 0; i < triangleCount; i++) {
-          // Triangle fan: always use vertex 0, then i+1, then i+2
+          // Triangle fan
           processVertex(faceVerts[0]);
           processVertex(faceVerts[i + 1]);
           processVertex(faceVerts[i + 2]);
@@ -84,15 +72,13 @@ class ObjLoader {
         return;
       }
 
-      // Parse "v/vt/vn" or "v//vn" or "v/vt"
       const indicesData = vertString.split("/");
 
-      // OBJ indices are 1-based, convert to 0-based
+      // OBJ indices are 1-base, convert to 0-base
       const posIndex = parseInt(indicesData[0]) - 1;
       const uvIndex = indicesData[1] ? parseInt(indicesData[1]) - 1 : -1;
       const normIndex = indicesData[2] ? parseInt(indicesData[2]) - 1 : -1;
 
-      // Get actual data
       const pos = rawPositions[posIndex];
       const uv = uvIndex >= 0 ? rawUVs[uvIndex] : [0, 0];
       const norm = normIndex >= 0 ? rawNormals[normIndex] : [0, 0, 0];

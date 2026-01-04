@@ -1,8 +1,4 @@
 class Primitives {
-  /**
-   * Creates a Cube Mesh.
-   * @param {WebGL2RenderingContext} gl
-   */
   static createCube(gl) {
     // Standard Cube with distinct normals for flat shading logic
     const positions = [
@@ -129,13 +125,7 @@ class Primitives {
     return new Mesh(gl, { positions, normals, uvs, indices });
   }
 
-  /**
-   * Creates a UV Sphere Mesh.
-   * @param {WebGL2RenderingContext} gl
-   * @param {number} radius
-   * @param {number} latitudeBands (slices)
-   * @param {number} longitudeBands (stacks)
-   */
+  // UV Sphere
   static createSphere(gl, radius = 1, latitudeBands = 30, longitudeBands = 30) {
     const positions = [];
     const normals = [];
@@ -182,13 +172,7 @@ class Primitives {
 
     return new Mesh(gl, { positions, normals, uvs, indices });
   }
-  /**
-   * Creates a Cylinder with smooth shading.
-   * @param {WebGL2RenderingContext} gl
-   * @param {number} radius - Radius of the cylinder
-   * @param {number} height - Height of the cylinder
-   * @param {number} segments - Number of radial segments (e.g., 32)
-   */
+
   static createCylinder(gl, radius = 1, height = 2, segments = 32) {
     const positions = [];
     const normals = [];
@@ -197,7 +181,7 @@ class Primitives {
 
     const halfH = height / 2;
 
-    // --- Side Geometry ---
+    // Side Geometry
     // i = current angle (Right), i+1 = next angle (Left)
     for (let i = 0; i <= segments; i++) {
       const theta = (i / segments) * Math.PI * 2;
@@ -217,23 +201,14 @@ class Primitives {
 
     // Indices
     for (let i = 0; i < segments; i++) {
-      const base = i * 2; // Current Column (Right)
-      const next = base + 2; // Next Column (Left)
+      const base = i * 2;
+      const next = base + 2;
 
-      // We have 4 points:
-      // base     (Top Right)
-      // base + 1 (Bottom Right)
-      // next     (Top Left)
-      // next + 1 (Bottom Left)
-
-      // Triangle 1: Bottom Right -> Top Right -> Top Left
       indices.push(base + 1, base, next);
-
-      // Triangle 2: Bottom Right -> Top Left -> Bottom Left
       indices.push(base + 1, next, next + 1);
     }
 
-    // --- Top Cap ---
+    // Top Cap
     const topCenter = positions.length / 3;
     positions.push(0, halfH, 0);
     normals.push(0, 1, 0);
@@ -250,7 +225,7 @@ class Primitives {
       indices.push(topCenter, topCenter + 2 + i, topCenter + 1 + i);
     }
 
-    // --- Bottom Cap ---
+    // Bottom Cap
     const botCenter = positions.length / 3;
     positions.push(0, -halfH, 0);
     normals.push(0, -1, 0);
@@ -274,24 +249,14 @@ class Primitives {
     return new Mesh(gl, { positions, normals, uvs, indices });
   }
 
-  /**
-   * Creates a Hexagonal Prism with flat shading (hard edges).
-   */
   static createHexagonalPrism(gl, radius = 1, height = 2) {
     return this._createFlatPrism(gl, radius, height, 6);
   }
 
-  /**
-   * Creates a Triangular Prism with flat shading (hard edges).
-   */
   static createTriangularPrism(gl, radius = 1, height = 2) {
     return this._createFlatPrism(gl, radius, height, 3);
   }
 
-  /**
-   * Helper: Generates a prism with flat faces (duplicated vertices).
-   * Used for Hexagonal and Triangular prisms.
-   */
   static _createFlatPrism(gl, radius, height, sides) {
     const positions = [];
     const normals = [];
@@ -313,7 +278,6 @@ class Primitives {
       const nx = Math.cos(theta + Math.PI / sides);
       const nz = Math.sin(theta + Math.PI / sides);
 
-      // Order: BottomLeft, BottomRight, TopRight, TopLeft
       positions.push(x1, -halfH, z1); // 0
       normals.push(nx, 0, nz);
       uvs.push(0, 0);
@@ -330,15 +294,14 @@ class Primitives {
       normals.push(nx, 0, nz);
       uvs.push(0, 1);
 
-      // Corrected Winding (CCW)
       const offset = i * 4;
-      // Triangle 1: BottomLeft -> TopRight -> TopLeft
+
       indices.push(offset, offset + 3, offset + 2);
-      // Triangle 2: BottomLeft -> BottomRight -> TopRight
+
       indices.push(offset, offset + 2, offset + 1);
     }
 
-    // --- 2. Top Cap ---
+    //Top Cap
     let baseIndex = positions.length / 3;
     const topCenterIndex = baseIndex;
     positions.push(0, halfH, 0); // Center
@@ -361,7 +324,7 @@ class Primitives {
       );
     }
 
-    // --- 3. Bottom Cap ---
+    //Bottom Cap
     baseIndex = positions.length / 3;
     const botCenterIndex = baseIndex;
     positions.push(0, -halfH, 0); // Center
@@ -380,7 +343,7 @@ class Primitives {
       uvs.push(0.5 + Math.cos(theta) / 2, 0.5 + Math.sin(theta) / 2);
     }
 
-    // Bottom indices (Reversed for CCW when looking from bottom)
+    // Bottom indices
     for (let i = 0; i < sides; i++) {
       indices.push(
         botCenterIndex,
