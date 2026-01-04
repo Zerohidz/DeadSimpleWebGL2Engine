@@ -30,48 +30,138 @@
     </div>
     <canvas id="glCanvas"></canvas>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/3.4.2/gl-matrix-min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.umd.min.js"></script>
     <script id="vertex-shader" type="x-shader/x-vertex">
-        #version 300 es
+          #version 300 es
 
-        // Layout locations must match the Mesh class
-        in vec3 a_position;
-        in vec3 a_normal;
-        in vec2 a_uv;
+          // Layout locations must match the Mesh class
+          in vec3 a_position;
+          in vec3 a_normal;
+          in vec2 a_uv;
 
-        uniform mat4 u_matrix;
+          uniform mat4 u_model;      // Model Matrix (Local -> World)
+      uniform mat4 u_view;       // View Matrix (World -> Camera)
+      uniform mat4 u_projection; // Projection Matrix
 
-        out vec2 v_uv; // Pass to fragment
       out vec3 v_normal;
+      out vec3 v_fragPos; // World position of the vertex
+       out vec2 v_uv;
 
       void main() {
-          gl_Position = u_matrix * vec4(a_position, 1.0);
-          v_uv = a_uv;       // Pass through
-          v_normal = a_normal;
+          // Calculate World Position
+          vec4 worldPos = u_model * vec4(a_position, 1.0);
+          v_fragPos = worldPos.xyz;
+
+          // Transform Normal to World Space (correcting for non-uniform scale)
+          // In production, pass a separate NormalMatrix (transpose(inverse(model)))
+          v_normal = mat3(transpose(inverse(u_model))) * a_normal;
+
+          v_uv = a_uv;
+          gl_Position = u_projection * u_view * worldPos;
       }
     </script>
 
     <script id="fragment-shader" type="x-shader/x-fragment">
-        #version 300 es
+      #version 300 es
       precision mediump float;
 
-      in vec2 v_uv;
+      // Inputs from Vertex Shader
+      in vec3 v_fragPos;
       in vec3 v_normal;
+      in vec2 v_uv;
 
-      // The texture sampler
+      // Texture
       uniform sampler2D u_texture;
+
+      // Camera Position (needed for Specular calculation)
+      uniform vec3 u_viewPos;
+
+      // --- STRUCTS ---
+      struct Material {
+          float shininess;  // Specular power (e.g., 32.0)
+      };
+
+      struct DirLight {
+          vec3 direction;   // Normalized direction TO the light source
+          vec3 color;
+          float intensity;
+      };
+
+      struct PointLight {
+          vec3 position;
+          vec3 color;
+          float intensity;
+          float constant;
+          float linear;
+          float quadratic;
+      };
+
+      // --- UNIFORMS ---
+      uniform Material u_material;
+      uniform DirLight u_dirLight;
+      uniform PointLight u_pointLight;
+      uniform vec3 u_ambientColor;
 
       out vec4 outColor;
 
+      // --- FUNCTIONS ---
+
+      // 1. Calculate Directional Light
+      vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
+          vec3 lightDir = normalize(-light.direction); // Direction to light
+
+          // Diffuse
+          float diff = max(dot(normal, lightDir), 0.0);
+
+          // Specular (Blinn-Phong)
+          vec3 halfwayDir = normalize(lightDir + viewDir);
+          float spec = pow(max(dot(normal, halfwayDir), 0.0), u_material.shininess);
+
+          vec3 ambient  = u_ambientColor * vec3(texture(u_texture, v_uv));
+          vec3 diffuse  = light.color * light.intensity * diff * vec3(texture(u_texture, v_uv));
+          vec3 specular = light.color * light.intensity * spec; // Assuming white specular highlights
+
+          return (diffuse + specular);
+      }
+
+      // 2. Calculate Point Light
+      vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+          vec3 lightDir = normalize(light.position - fragPos);
+
+          // Diffuse
+          float diff = max(dot(normal, lightDir), 0.0);
+
+          // Specular
+          vec3 halfwayDir = normalize(lightDir + viewDir);
+          float spec = pow(max(dot(normal, halfwayDir), 0.0), u_material.shininess);
+
+          // Attenuation [cite: 35]
+          float distance    = length(light.position - fragPos);
+          float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
+
+          vec3 diffuse  = light.color * light.intensity * diff * vec3(texture(u_texture, v_uv));
+          vec3 specular = light.color * light.intensity * spec;
+
+          diffuse  *= attenuation;
+          specular *= attenuation;
+
+          return (diffuse + specular);
+      }
+
       void main() {
-          // Sample the color from the texture at coordinate v_uv
-          vec4 texColor = texture(u_texture, v_uv);
+          vec3 norm = normalize(v_normal);
+          vec3 viewDir = normalize(u_viewPos - v_fragPos);
 
-          // Simple lighting (dot product) to see 3D shape + texture
-          vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
-          float diff = max(dot(normalize(v_normal), lightDir), 0.2); // 0.2 ambient
+          // Start with Ambient
+          vec3 result = u_ambientColor * vec3(texture(u_texture, v_uv));
 
-          // Multiply texture color by light intensity
-          outColor = vec4(texColor.rgb * diff, texColor.a);
+          // Add Directional Light
+          result += CalcDirLight(u_dirLight, norm, viewDir);
+
+          // Add Point Light
+          result += CalcPointLight(u_pointLight, norm, v_fragPos, viewDir);
+
+          outColor = vec4(result, 1.0);
       }
     </script>
 
