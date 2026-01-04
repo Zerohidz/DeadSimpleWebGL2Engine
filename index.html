@@ -20,6 +20,25 @@
         left: 10px;
         color: white;
         font-family: sans-serif;
+        pointer-events: none;
+        width: 100%;
+      }
+      .view-label {
+        position: absolute;
+        top: 10px;
+        font-weight: bold;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 5px 10px;
+        border-radius: 4px;
+        pointer-events: auto;
+      }
+      #label-engine {
+        left: 10px;
+        color: #00ffcc;
+      }
+      #label-game {
+        left: 51vw;
+        color: #ffcc00;
       }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.21"></script>
@@ -27,10 +46,14 @@
   </head>
   <body>
     <div id="ui-container">
-      <h1>WebGL2 Mini Engine</h1>
-      <p>FPS: <span id="fps">0</span></p>
+      <div id="label-engine" class="view-label">VIEW 1 (Engine)</div>
+      <div id="label-game" class="view-label">VIEW 2 (Game)</div>
+      <p style="margin-top: 50px; margin-left: 10px">
+        FPS: <span id="fps">0</span>
+      </p>
     </div>
     <canvas id="glCanvas"></canvas>
+
     <script id="vertex-shader" type="x-shader/x-vertex">
           #version 300 es
 
@@ -48,14 +71,9 @@
        out vec2 v_uv;
 
       void main() {
-          // Calculate World Position
           vec4 worldPos = u_model * vec4(a_position, 1.0);
           v_fragPos = worldPos.xyz;
-
-          // Transform Normal to World Space (correcting for non-uniform scale)
-          // In production, pass a separate NormalMatrix (transpose(inverse(model)))
           v_normal = mat3(transpose(inverse(u_model))) * a_normal;
-
           v_uv = a_uv;
           gl_Position = u_projection * u_view * worldPos;
       }
@@ -103,7 +121,6 @@
 
       out vec4 outColor;
 
-      // --- FUNCTIONS ---
       vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 texColor) {
           vec3 lightDir = normalize(-light.direction);
           float diff = max(dot(normal, lightDir), 0.0);
