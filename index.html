@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BBM 414 WebGL2 Engine</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: #333;
+      }
+      canvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+      #ui-container {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: white;
+        font-family: sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="ui-container">
+      <h1>WebGL2 Mini Engine</h1>
+      <p>FPS: <span id="fps">0</span></p>
+    </div>
+    <canvas id="glCanvas"></canvas>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/3.4.2/gl-matrix-min.js"></script>
+    <script id="vertex-shader" type="x-shader/x-vertex">
+        #version 300 es
+
+        // Layout locations must match the Mesh class
+        in vec3 a_position;
+        in vec3 a_normal;
+        in vec2 a_uv;
+
+        uniform mat4 u_matrix;
+
+        out vec2 v_uv; // Pass to fragment
+      out vec3 v_normal;
+
+      void main() {
+          gl_Position = u_matrix * vec4(a_position, 1.0);
+          v_uv = a_uv;       // Pass through
+          v_normal = a_normal;
+      }
+    </script>
+
+    <script id="fragment-shader" type="x-shader/x-fragment">
+        #version 300 es
+      precision mediump float;
+
+      in vec2 v_uv;
+      in vec3 v_normal;
+
+      // The texture sampler
+      uniform sampler2D u_texture;
+
+      out vec4 outColor;
+
+      void main() {
+          // Sample the color from the texture at coordinate v_uv
+          vec4 texColor = texture(u_texture, v_uv);
+
+          // Simple lighting (dot product) to see 3D shape + texture
+          vec3 lightDir = normalize(vec3(0.5, 1.0, 0.3));
+          float diff = max(dot(normalize(v_normal), lightDir), 0.2); // 0.2 ambient
+
+          // Multiply texture color by light intensity
+          outColor = vec4(texColor.rgb * diff, texColor.a);
+      }
+    </script>
+
+    <script src="webgl-utils.js"></script>
+    <script src="mesh.js"></script>
+    <script src="primitives.js"></script>
+    <script src="obj-loader.js"></script>
+    <script src="texture.js"></script>
+    <script src="main.js"></script>
+  </body>
+</html>
