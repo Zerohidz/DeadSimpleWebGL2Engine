@@ -104,6 +104,9 @@ async function main() {
   // 4. Initialize GUI
   initGUI();
 
+  if (confirm("Do you want to load demo scene?")) {
+    loadDemoScene();
+  }
   // 5. Add Default Objects (So the scene isn't empty)
   // addObject("Cube", cubeMesh);
   // addPointLight();
@@ -116,8 +119,35 @@ async function main() {
   // 6. Start Render Loop
   requestAnimationFrame(drawScene);
 }
-// --- INPUT SYSTEM ---
 
+function loadDemoScene() {
+  let objectIndex = state.objects.length;
+  addPointLight();
+  addObject("Cube", cubeMesh);
+  state.objects[objectIndex].texture = new Texture(gl, "textures/crate.png");
+  loadModel("models/monkey_head.obj", () => {
+    state.objects[objectIndex + 1].position[0] = 2.5;
+    loadModel("models/acid_barrel.obj", () => {
+      state.objects[objectIndex + 2].position[0] = -2.5;
+      state.objects[objectIndex + 2].position[1] = -1.5;
+      state.objects[objectIndex + 2].position[2] = -0.5;
+      state.objects[objectIndex + 2].texture = new Texture(
+        gl,
+        "textures/acid_barrel.png"
+      );
+      loadModel("models/teapot.obj", () => {
+        state.objects[objectIndex + 3].position[1] = 2.5;
+        state.objects[objectIndex + 3].scale[0] = 0.4;
+        state.objects[objectIndex + 3].scale[1] = 0.4;
+        state.objects[objectIndex + 3].scale[2] = 0.4;
+
+        const controllers = gui.folders.objects.controllersRecursive();
+        controllers.forEach((c) => c.updateDisplay());
+      });
+    });
+  });
+}
+// --- INPUT SYSTEM ---
 function initInput(canvas) {
   // Keyboard
   window.addEventListener("keydown", (e) => {
@@ -289,10 +319,11 @@ function addPointLight() {
   lightId++;
 }
 
-function loadModel(url) {
+function loadModel(url, then = null) {
   ObjLoader.load(gl, url)
     .then((mesh) => {
       addObject("Model", mesh);
+      if (then) then();
     })
     .catch((err) => {
       console.error(err);
@@ -352,7 +383,10 @@ function initGUI() {
 
   const folderGlobal = gui.addFolder("Global Settings");
   folderGlobal.addColor(state, "ambientColor").name("Ambient Color");
-
+  const tmp = {
+    loadDemoSceneBtn: () => loadDemoScene(),
+  };
+  folderGlobal.add(tmp, "loadDemoSceneBtn").name("Load Demo Scene Assets");
   const inputControlFolder = gui.addFolder("Input Control");
   inputControlFolder
     .add(state, "activeControl", {
