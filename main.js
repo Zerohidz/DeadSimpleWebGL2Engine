@@ -7,11 +7,12 @@ let gui;
 let sphereMesh, cubeMesh, cylinderMesh, hexagonalPrismMesh, triangularPrismMesh;
 const { mat4, vec3 } = glMatrix;
 
-function createCameraConfig(pos, lookAt, mode = "static") {
+function createCameraConfig(pos, lookAt, mode = "static", clearColor) {
   return {
     mode: mode, // 'static', 'fps', 'orbit'
     position: [...pos],
     target: [...lookAt],
+    clearColor: [...clearColor],
 
     // FPS State
     rotation: [-90, -20], // Yaw, Pitch
@@ -33,26 +34,18 @@ function createCameraConfig(pos, lookAt, mode = "static") {
 const state = {
   activeControl: "engine",
 
-  engineCamera: createCameraConfig([0, 5, 10], [0, 0, 0], "fps"),
-  gameCamera: createCameraConfig([-15, 10, 15], [0, 0, 0], "static"),
-
-  // // Camera State
-  // camera: {
-  //   mode: "static", // 'static', 'fps', 'orbit'
-  //   position: [0, 5, 10],
-  //   target: [0, 0, 0], // What we are looking at
-
-  //   // FPS State
-  //   rotation: [-90, 0], // Yaw, Pitch (degrees)
-  //   speed: 10.0,
-  //   sensitivity: 0.1,
-
-  //   // Orbit State
-  //   orbitTargetId: null, // Which object ID to orbit
-  //   orbitRadius: 10,
-  //   orbitTheta: 0, // Horizontal angle
-  //   orbitPhi: 1.0, // Vertical angle (radians)
-  // },
+  engineCamera: createCameraConfig(
+    [0, 5, 10],
+    [0, 0, 0],
+    "fps",
+    [0.05, 0.05, 0.1, 1.0]
+  ),
+  gameCamera: createCameraConfig(
+    [-15, 10, 15],
+    [0, 0, 0],
+    "static",
+    [0.2, 0.2, 0.2, 1.0]
+  ),
 
   ambientColor: [0.1, 0.1, 0.15],
 
@@ -317,7 +310,7 @@ function createCameraGUI(parentGui, name, cameraObj) {
   folder.add(cameraObj, "mode", ["static", "fps", "orbit"]).name("Mode");
   folder.add(cameraObj, "fov", 10, 120).name("FOV");
   folder.add(cameraObj, "showHelper").name("Show Gizmo");
-
+  folder.addColor(cameraObj, "clearColor").name("Clear Color");
   // Sub-folder: FPS
   const fpsFolder = folder.addFolder("FPS Settings");
   fpsFolder.add(cameraObj, "speed", 1, 50).name("Speed");
@@ -510,7 +503,7 @@ function drawScene(currentTime) {
   // --- VIEW 1: ENGINE (Left) ---
   gl.viewport(0, 0, halfW, h);
   gl.scissor(0, 0, halfW, h);
-  gl.clearColor(0.2, 0.2, 0.2, 1.0);
+  gl.clearColor(...state.engineCamera.clearColor);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   gl.useProgram(program);
@@ -543,7 +536,7 @@ function drawScene(currentTime) {
   // --- VIEW 2: GAME (Right) ---
   gl.viewport(halfW, 0, halfW, h);
   gl.scissor(halfW, 0, halfW, h);
-  gl.clearColor(0.05, 0.05, 0.1, 1.0);
+  gl.clearColor(...state.gameCamera.clearColor);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   {
