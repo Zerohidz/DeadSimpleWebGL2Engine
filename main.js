@@ -372,10 +372,10 @@ function initGUI() {
     });
 
   // 2. LEFT VIEW (ENGINE) SETTINGS
-  createCameraGUI(gui, "Left View (Engine)", state.engineCamera);
+  createCameraGUI(inputControlFolder, "Left View (Engine)", state.engineCamera);
 
   // 3. RIGHT VIEW (GAME) SETTINGS
-  createCameraGUI(gui, "Right View (Game)", state.gameCamera);
+  createCameraGUI(inputControlFolder, "Right View (Game)", state.gameCamera);
 
   const folderSun = gui.addFolder("Directional Light (Sun)");
   folderSun.add(state.dirLight.direction, "0", -1, 1).name("Dir X");
@@ -395,6 +395,20 @@ function initGUI() {
     addLight: () => addPointLight(),
     modelUrl: "models/monkey_head.obj",
     loadModelBtn: () => loadModel(params.modelUrl),
+    loadModelFromDiskBtn: () => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".obj";
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          // Create a local Blob URL (e.g., blob:http://...)
+          const blobUrl = URL.createObjectURL(file);
+          loadModel(blobUrl);
+        }
+      };
+      input.click();
+    },
   };
 
   folderTools.add(params, "addCube").name("Add Cube");
@@ -405,7 +419,7 @@ function initGUI() {
   folderTools.add(params, "addLight").name("Add Point Light");
   folderTools.add(params, "modelUrl").name("OBJ URL");
   folderTools.add(params, "loadModelBtn").name("Load OBJ");
-
+  folderTools.add(params, "loadModelFromDiskBtn").name("Upload OBJ...");
   gui.folders = {
     objects: gui.addFolder("Objects List"),
     lights: gui.addFolder("Point Lights List"),
