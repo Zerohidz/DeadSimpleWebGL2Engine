@@ -4,7 +4,7 @@
 let gl, program;
 let defaultTexture;
 let gui;
-let sphereMesh, cubeMesh, cylinderMesh;
+let sphereMesh, cubeMesh, cylinderMesh, hexagonalPrismMesh, triangularPrismMesh;
 const { mat4, vec3 } = glMatrix;
 const state = {
   // Camera State
@@ -74,9 +74,10 @@ async function main() {
   cubeMesh = Primitives.createCube(gl);
   sphereMesh = Primitives.createSphere(gl, 1, 20, 20);
   cylinderMesh = Primitives.createCylinder(gl, 1, 2, 32);
-
+  triangularPrismMesh = Primitives.createTriangularPrism(gl);
+  hexagonalPrismMesh = Primitives.createHexagonalPrism(gl);
   // Load Default Texture
-  defaultTexture = new Texture(gl, "textures/crate.png");
+  defaultTexture = new Texture(gl, "textures/default.png");
 
   // 4. Initialize GUI
   initGUI();
@@ -349,6 +350,9 @@ function initGUI() {
     addCube: () => addObject("Cube", cubeMesh),
     addSphere: () => addObject("Sphere", sphereMesh),
     addCylinder: () => addObject("Cylinder", cylinderMesh),
+    addTriangularPrism: () =>
+      addObject("Triangular Prism", triangularPrismMesh),
+    addHexagonalPrism: () => addObject("Hexagonal Prism", hexagonalPrismMesh),
     addLight: () => addPointLight(),
     modelUrl: "models/monkey_head.obj",
     loadModelBtn: () => loadModel(params.modelUrl),
@@ -357,6 +361,8 @@ function initGUI() {
   folderTools.add(params, "addCube").name("Add Cube");
   folderTools.add(params, "addSphere").name("Add Sphere");
   folderTools.add(params, "addCylinder").name("Add Cylinder");
+  folderTools.add(params, "addTriangularPrism").name("Add Triangular Prism");
+  folderTools.add(params, "addHexagonalPrism").name("Add Hexagonal Prism");
   folderTools.add(params, "addLight").name("Add Point Light");
   folderTools.add(params, "modelUrl").name("OBJ URL");
   folderTools.add(params, "loadModelBtn").name("Load OBJ");
@@ -387,7 +393,7 @@ function addGuiForObject(obj) {
   const texFolder = folder.addFolder("Texture");
 
   const texParams = {
-    url: "textures/crate.png",
+    url: "textures/default.png",
 
     // Option 1: Load from Text URL
     loadUrl: () => {
@@ -467,6 +473,8 @@ function drawScene(currentTime) {
   // Send Point Lights (Array)
   gl.uniform1i(loc("u_numPointLights"), state.pointLights.length);
 
+  defaultTexture.bind(0);
+  gl.uniform1i(loc("u_texture"), 0);
   state.pointLights.forEach((light, i) => {
     gl.uniform3fv(loc(`u_pointLights[${i}].position`), light.position);
     gl.uniform3fv(loc(`u_pointLights[${i}].color`), light.color);
