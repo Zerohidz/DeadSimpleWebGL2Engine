@@ -40,7 +40,6 @@ async function main() {
   resizeCanvas();
 
   // 2. Compile Shaders
-  // Ensure these IDs match your HTML script tags exactly
   const vsSource = document.getElementById("vertex-shader").text.trim();
   const fsSource = document.getElementById("fragment-shader").text.trim();
   program = createProgram(gl, vsSource, fsSource);
@@ -49,24 +48,22 @@ async function main() {
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.CULL_FACE);
 
-  // Create Primitives (Assumes Primitives class is loaded)
+  // Create Primitives
   cubeMesh = Primitives.createCube(gl);
   sphereMesh = Primitives.createSphere(gl, 1, 20, 20);
   cylinderMesh = Primitives.createCylinder(gl, 1, 2, 32);
 
-  // Load Texture (Assumes Texture class is loaded)
+  // Load Default Texture
   defaultTexture = new Texture(gl, "textures/crate.png");
 
   // 4. Initialize GUI
   initGUI();
 
-  // --- FIX: ADD DEFAULT OBJECTS HERE ---
-  // Without this, the scene and UI lists are empty!
+  // 5. Add Default Objects (So the scene isn't empty)
   addObject("Cube", cubeMesh);
   addPointLight();
-  // -------------------------------------
 
-  // 5. Start Render Loop
+  // 6. Start Render Loop
   requestAnimationFrame(drawScene);
 }
 
@@ -78,7 +75,7 @@ function addObject(type, mesh, texture = defaultTexture) {
     name: `${type} ${objId}`,
     type: type,
     mesh: mesh,
-    texture: texture,
+    texture: texture, // Individual texture assignment
     position: [0, 0, 0],
     rotation: [0, 0, 0],
     scale: [1, 1, 1],
@@ -86,7 +83,7 @@ function addObject(type, mesh, texture = defaultTexture) {
     visible: true,
   };
 
-  // Spread objects out slightly if we have more than one
+  // Offset position if objects exist so they don't stack
   if (state.objects.length > 0) {
     obj.position[0] = state.objects.length * 2.5;
   }
@@ -117,7 +114,6 @@ function addPointLight() {
 }
 
 function loadModel(url) {
-  // Assumes ObjLoader is loaded
   ObjLoader.load(gl, url)
     .then((mesh) => {
       addObject("Model", mesh);
@@ -131,7 +127,6 @@ function loadModel(url) {
 // --- GUI LOGIC ---
 
 function initGUI() {
-  // Assumes lil-gui is loaded via <script>
   gui = new lil.GUI({ title: "Scene Editor" });
 
   const folderGlobal = gui.addFolder("Global Settings");
@@ -170,17 +165,51 @@ function initGUI() {
 function addGuiForObject(obj) {
   const folder = gui.folders.objects.addFolder(obj.name);
 
+  // Transform Controls
   folder.add(obj.position, "0", -10, 10).name("Pos X");
   folder.add(obj.position, "1", -10, 10).name("Pos Y");
   folder.add(obj.position, "2", -10, 10).name("Pos Z");
   folder.add(obj.rotation, "0", 0, 6.28).name("Rot X");
   folder.add(obj.rotation, "1", 0, 6.28).name("Rot Y");
   folder.add(obj.rotation, "2", 0, 6.28).name("Rot Z");
-  folder.add(obj.scale, "0", 0.1, 5).name("Scale X"); // Note: Non-uniform scaling requires logic in shader if normals aren't adjusted
+  folder.add(obj.scale, "0", 0.1, 5).name("Scale X");
   folder.add(obj.scale, "1", 0.1, 5).name("Scale Y");
   folder.add(obj.scale, "2", 0.1, 5).name("Scale Z");
   folder.add(obj, "shininess", 1, 100);
   folder.add(obj, "visible");
+
+  // --- NEW: Texture Controls ---
+  const texFolder = folder.addFolder("Texture");
+
+  const texParams = {
+    url: "textures/crate.png",
+
+    // Option 1: Load from Text URL
+    loadUrl: () => {
+      obj.texture = new Texture(gl, texParams.url);
+    },
+
+    // Option 2: Upload File from Computer
+    uploadFile: () => {
+      // Create a hidden file input
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          // Create a local Blob URL (e.g., blob:http://...)
+          const blobUrl = URL.createObjectURL(file);
+          obj.texture = new Texture(gl, blobUrl);
+        }
+      };
+      input.click();
+    },
+  };
+
+  texFolder.add(texParams, "url").name("URL Path");
+  texFolder.add(texParams, "loadUrl").name("Load from URL");
+  texFolder.add(texParams, "uploadFile").name("Upload Image...");
 }
 
 function addGuiForLight(light) {
@@ -215,7 +244,6 @@ function drawScene(currentTime) {
   const view = mat4.create();
   mat4.lookAt(view, state.cameraPos, [0, 0, 0], [0, 1, 0]);
 
-  // Send Globals
   const loc = (name) => gl.getUniformLocation(program, name);
 
   gl.uniformMatrix4fv(loc("u_projection"), false, projection);
@@ -253,6 +281,7 @@ function drawScene(currentTime) {
   state.objects.forEach((obj) => {
     if (!obj.visible) return;
 
+    // Use the object's SPECIFIC texture
     if (obj.texture) {
       obj.texture.bind(0);
       gl.uniform1i(loc("u_texture"), 0);
