@@ -22,6 +22,8 @@
         font-family: sans-serif;
       }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.21"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gl-matrix@3.4.4/gl-matrix-min.min.js"></script>
   </head>
   <body>
     <div id="ui-container">
@@ -29,8 +31,6 @@
       <p>FPS: <span id="fps">0</span></p>
     </div>
     <canvas id="glCanvas"></canvas>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/3.4.2/gl-matrix-min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lil-gui@0.19.1/dist/lil-gui.umd.min.js"></script>
     <script id="vertex-shader" type="x-shader/x-vertex">
           #version 300 es
 
@@ -65,24 +65,19 @@
       #version 300 es
       precision mediump float;
 
-      // Inputs from Vertex Shader
       in vec3 v_fragPos;
       in vec3 v_normal;
       in vec2 v_uv;
 
-      // Texture
       uniform sampler2D u_texture;
-
-      // Camera Position (needed for Specular calculation)
       uniform vec3 u_viewPos;
 
-      // --- STRUCTS ---
       struct Material {
-          float shininess;  // Specular power (e.g., 32.0)
+          float shininess;
       };
 
       struct DirLight {
-          vec3 direction;   // Normalized direction TO the light source
+          vec3 direction;
           vec3 color;
           float intensity;
       };
@@ -96,50 +91,44 @@
           float quadratic;
       };
 
-      // --- UNIFORMS ---
+      #define MAX_POINT_LIGHTS 4  // Max lights supported
+
       uniform Material u_material;
       uniform DirLight u_dirLight;
-      uniform PointLight u_pointLight;
+      // Array of lights
+      uniform PointLight u_pointLights[MAX_POINT_LIGHTS];
+      uniform int u_numPointLights; // How many are active
+
       uniform vec3 u_ambientColor;
 
       out vec4 outColor;
 
       // --- FUNCTIONS ---
-
-      // 1. Calculate Directional Light
-      vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir) {
-          vec3 lightDir = normalize(-light.direction); // Direction to light
-
-          // Diffuse
+      vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir, vec3 texColor) {
+          vec3 lightDir = normalize(-light.direction);
           float diff = max(dot(normal, lightDir), 0.0);
 
-          // Specular (Blinn-Phong)
           vec3 halfwayDir = normalize(lightDir + viewDir);
           float spec = pow(max(dot(normal, halfwayDir), 0.0), u_material.shininess);
 
-          vec3 ambient  = u_ambientColor * vec3(texture(u_texture, v_uv));
-          vec3 diffuse  = light.color * light.intensity * diff * vec3(texture(u_texture, v_uv));
-          vec3 specular = light.color * light.intensity * spec; // Assuming white specular highlights
+          vec3 ambient  = u_ambientColor * texColor;
+          vec3 diffuse  = light.color * light.intensity * diff * texColor;
+          vec3 specular = light.color * light.intensity * spec;
 
-          return (diffuse + specular);
+          return (diffuse + specular); // Ambient added only once in main
       }
 
-      // 2. Calculate Point Light
-      vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir) {
+      vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir, vec3 texColor) {
           vec3 lightDir = normalize(light.position - fragPos);
-
-          // Diffuse
           float diff = max(dot(normal, lightDir), 0.0);
 
-          // Specular
           vec3 halfwayDir = normalize(lightDir + viewDir);
           float spec = pow(max(dot(normal, halfwayDir), 0.0), u_material.shininess);
 
-          // Attenuation [cite: 35]
           float distance    = length(light.position - fragPos);
           float attenuation = 1.0 / (light.constant + light.linear * distance + light.quadratic * (distance * distance));
 
-          vec3 diffuse  = light.color * light.intensity * diff * vec3(texture(u_texture, v_uv));
+          vec3 diffuse  = light.color * light.intensity * diff * texColor;
           vec3 specular = light.color * light.intensity * spec;
 
           diffuse  *= attenuation;
@@ -151,15 +140,19 @@
       void main() {
           vec3 norm = normalize(v_normal);
           vec3 viewDir = normalize(u_viewPos - v_fragPos);
+          vec3 texColor = vec3(texture(u_texture, v_uv));
 
-          // Start with Ambient
-          vec3 result = u_ambientColor * vec3(texture(u_texture, v_uv));
+          // 1. Ambient (Base)
+          vec3 result = u_ambientColor * texColor;
 
-          // Add Directional Light
-          result += CalcDirLight(u_dirLight, norm, viewDir);
+          // 2. Directional Light
+          result += CalcDirLight(u_dirLight, norm, viewDir, texColor);
 
-          // Add Point Light
-          result += CalcPointLight(u_pointLight, norm, v_fragPos, viewDir);
+          // 3. Point Lights (Loop)
+          for(int i = 0; i < MAX_POINT_LIGHTS; i++) {
+              if(i >= u_numPointLights) break;
+              result += CalcPointLight(u_pointLights[i], norm, v_fragPos, viewDir, texColor);
+          }
 
           outColor = vec4(result, 1.0);
       }

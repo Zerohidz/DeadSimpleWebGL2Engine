@@ -1,51 +1,36 @@
 "use strict";
-let loadedModel = null;
-let boxTexture;
+
+// --- GLOBAL VARIABLES ---
+let gl, program;
+let defaultTexture;
 let gui;
+let sphereMesh, cubeMesh, cylinderMesh;
+
 const state = {
-  // Camera
-  cameraPos: [0, 2, 6],
+  cameraPos: [0, 5, 10],
+  ambientColor: [0.1, 0.1, 0.15],
 
-  // Object Transform (For the Cube)
-  cube: {
-    position: [-1.5, 0, 0],
-    rotation: [0, 0, 0], // Euler angles
-    scale: [1, 1, 1],
-  },
-
-  // Lighting
-  ambientColor: [0.1, 0.1, 0.15], // RGB
-
+  // Directional Light
   dirLight: {
-    direction: [-0.5, -1.0, -0.3], // Sun direction
-    color: [1.0, 1.0, 0.9], // Slightly yellow
+    direction: [-0.5, -1.0, -0.3],
+    color: [1.0, 1.0, 0.9],
     intensity: 0.8,
   },
 
-  pointLight: {
-    position: [1.5, 1.0, 1.0],
-    color: [1.0, 0.2, 0.2], // Red light
-    intensity: 2.0,
-    constant: 1.0,
-    linear: 0.09,
-    quadratic: 0.032,
-  },
-
-  material: {
-    shininess: 32.0,
-  },
+  // Initialize arrays
+  pointLights: [],
+  objects: [],
 };
 
-async function main() {
-  // 1. Get WebGL2 Context
-  const canvas = document.querySelector("#glCanvas");
-  const gl = canvas.getContext("webgl2");
-  if (!gl) {
-    alert("WebGL 2.0 is not supported on this browser/machine.");
-    return;
-  }
+let objId = 1;
+let lightId = 1;
 
-  // 2. Resize Canvas to Full Screen
+async function main() {
+  // 1. Setup WebGL
+  const canvas = document.querySelector("#glCanvas");
+  gl = canvas.getContext("webgl2");
+  if (!gl) return alert("WebGL 2 not supported");
+
   function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -54,151 +39,237 @@ async function main() {
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
 
-  // 3. Compile Shaders
+  // 2. Compile Shaders
+  // Ensure these IDs match your HTML script tags exactly
   const vsSource = document.getElementById("vertex-shader").text.trim();
   const fsSource = document.getElementById("fragment-shader").text.trim();
-  const program = createProgram(gl, vsSource, fsSource);
+  program = createProgram(gl, vsSource, fsSource);
 
-  // 4. Look up Locations
-  const locs = {
-    model: gl.getUniformLocation(program, "u_model"),
-    view: gl.getUniformLocation(program, "u_view"),
-    projection: gl.getUniformLocation(program, "u_projection"),
-    viewPos: gl.getUniformLocation(program, "u_viewPos"),
-    ambientColor: gl.getUniformLocation(program, "u_ambientColor"),
-    texture: gl.getUniformLocation(program, "u_texture"),
+  // 3. Initialize Shared Resources
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.CULL_FACE);
 
-    // Directional Light
-    dirDir: gl.getUniformLocation(program, "u_dirLight.direction"),
-    dirColor: gl.getUniformLocation(program, "u_dirLight.color"),
-    dirInt: gl.getUniformLocation(program, "u_dirLight.intensity"),
+  // Create Primitives (Assumes Primitives class is loaded)
+  cubeMesh = Primitives.createCube(gl);
+  sphereMesh = Primitives.createSphere(gl, 1, 20, 20);
+  cylinderMesh = Primitives.createCylinder(gl, 1, 2, 32);
 
-    // Point Light
-    pointPos: gl.getUniformLocation(program, "u_pointLight.position"),
-    pointColor: gl.getUniformLocation(program, "u_pointLight.color"),
-    pointInt: gl.getUniformLocation(program, "u_pointLight.intensity"),
-    pointConst: gl.getUniformLocation(program, "u_pointLight.constant"),
-    pointLin: gl.getUniformLocation(program, "u_pointLight.linear"),
-    pointQuad: gl.getUniformLocation(program, "u_pointLight.quadratic"),
+  // Load Texture (Assumes Texture class is loaded)
+  defaultTexture = new Texture(gl, "textures/crate.png");
 
-    // Material
-    shininess: gl.getUniformLocation(program, "u_material.shininess"),
+  // 4. Initialize GUI
+  initGUI();
+
+  // --- FIX: ADD DEFAULT OBJECTS HERE ---
+  // Without this, the scene and UI lists are empty!
+  addObject("Cube", cubeMesh);
+  addPointLight();
+  // -------------------------------------
+
+  // 5. Start Render Loop
+  requestAnimationFrame(drawScene);
+}
+
+// --- SCENE MANAGEMENT HELPERS ---
+
+function addObject(type, mesh, texture = defaultTexture) {
+  const obj = {
+    id: objId++,
+    name: `${type} ${objId}`,
+    type: type,
+    mesh: mesh,
+    texture: texture,
+    position: [0, 0, 0],
+    rotation: [0, 0, 0],
+    scale: [1, 1, 1],
+    shininess: 32.0,
+    visible: true,
   };
-  boxTexture = new Texture(gl, "textures/crate.png");
-  const cubeMesh = Primitives.createCube(gl);
-  const sphereMesh = Primitives.createSphere(gl, 1.0, 30, 30);
-  const cylinderMesh = Primitives.createCylinder(gl, 2, 1, 32);
-  // 7. Render Loop
 
-  gui = new lil.GUI({ title: "Scene Controls" });
-  const folderObj = gui.addFolder("Target Cube");
-  folderObj.add(state.cube.position, "0", -5, 5).name("Pos X");
-  folderObj.add(state.cube.position, "1", -5, 5).name("Pos Y");
-  folderObj.add(state.cube.position, "2", -5, 5).name("Pos Z");
-  folderObj.add(state.cube.rotation, "0", 0, 6.28).name("Rot X");
-  folderObj.add(state.cube.rotation, "1", 0, 6.28).name("Rot Y");
+  // Spread objects out slightly if we have more than one
+  if (state.objects.length > 0) {
+    obj.position[0] = state.objects.length * 2.5;
+  }
 
-  // Lights Folder
-  const folderLights = gui.addFolder("Lighting");
-  folderLights.addColor(state, "ambientColor").name("Ambient");
+  state.objects.push(obj);
+  addGuiForObject(obj);
+}
 
-  const fDir = folderLights.addFolder("Directional Light (Sun)");
-  fDir.add(state.dirLight.direction, "0", -1, 1).name("Dir X");
-  fDir.add(state.dirLight.direction, "1", -1, 1).name("Dir Y");
-  fDir.add(state.dirLight.direction, "2", -1, 1).name("Dir Z");
-  fDir.add(state.dirLight, "intensity", 0, 5);
+function addPointLight() {
+  if (state.pointLights.length >= 4) {
+    alert("Max 4 Point Lights allowed.");
+    return;
+  }
 
-  const fPoint = folderLights.addFolder("Point Light (Lamp)");
-  fPoint.add(state.pointLight.position, "0", -5, 5).name("Pos X");
-  fPoint.add(state.pointLight.position, "1", -5, 5).name("Pos Y");
-  fPoint.add(state.pointLight.position, "2", -5, 5).name("Pos Z");
-  fPoint.addColor(state.pointLight, "color");
-  fPoint.add(state.pointLight, "intensity", 0, 10);
-  gl.enable(gl.DEPTH_TEST); // Enable Z-buffer
-  gl.enable(gl.CULL_FACE); // Backface culling
+  const light = {
+    id: lightId++,
+    name: `PointLight ${lightId}`,
+    position: [2, 2, 2],
+    color: [1.0, 0.5, 0.0],
+    intensity: 2.0,
+    constant: 1.0,
+    linear: 0.09,
+    quadratic: 0.032,
+  };
+
+  state.pointLights.push(light);
+  addGuiForLight(light);
+}
+
+function loadModel(url) {
+  // Assumes ObjLoader is loaded
+  ObjLoader.load(gl, url)
+    .then((mesh) => {
+      addObject("Model", mesh);
+    })
+    .catch((err) => {
+      console.error(err);
+      alert("Could not load model. Check console.");
+    });
+}
+
+// --- GUI LOGIC ---
+
+function initGUI() {
+  // Assumes lil-gui is loaded via <script>
+  gui = new lil.GUI({ title: "Scene Editor" });
+
+  const folderGlobal = gui.addFolder("Global Settings");
+  folderGlobal.addColor(state, "ambientColor").name("Ambient Color");
+
+  const folderSun = gui.addFolder("Directional Light (Sun)");
+  folderSun.add(state.dirLight.direction, "0", -1, 1).name("Dir X");
+  folderSun.add(state.dirLight.direction, "1", -1, 1).name("Dir Y");
+  folderSun.add(state.dirLight.direction, "2", -1, 1).name("Dir Z");
+  folderSun.addColor(state.dirLight, "color");
+  folderSun.add(state.dirLight, "intensity", 0, 5);
+
+  const folderTools = gui.addFolder("Add To Scene");
+  const params = {
+    addCube: () => addObject("Cube", cubeMesh),
+    addSphere: () => addObject("Sphere", sphereMesh),
+    addCylinder: () => addObject("Cylinder", cylinderMesh),
+    addLight: () => addPointLight(),
+    modelUrl: "models/monkey_head.obj",
+    loadModelBtn: () => loadModel(params.modelUrl),
+  };
+
+  folderTools.add(params, "addCube").name("Add Cube");
+  folderTools.add(params, "addSphere").name("Add Sphere");
+  folderTools.add(params, "addCylinder").name("Add Cylinder");
+  folderTools.add(params, "addLight").name("Add Point Light");
+  folderTools.add(params, "modelUrl").name("OBJ URL");
+  folderTools.add(params, "loadModelBtn").name("Load OBJ");
+
+  gui.folders = {
+    objects: gui.addFolder("Objects List"),
+    lights: gui.addFolder("Point Lights List"),
+  };
+}
+
+function addGuiForObject(obj) {
+  const folder = gui.folders.objects.addFolder(obj.name);
+
+  folder.add(obj.position, "0", -10, 10).name("Pos X");
+  folder.add(obj.position, "1", -10, 10).name("Pos Y");
+  folder.add(obj.position, "2", -10, 10).name("Pos Z");
+  folder.add(obj.rotation, "0", 0, 6.28).name("Rot X");
+  folder.add(obj.rotation, "1", 0, 6.28).name("Rot Y");
+  folder.add(obj.rotation, "2", 0, 6.28).name("Rot Z");
+  folder.add(obj.scale, "0", 0.1, 5).name("Scale X"); // Note: Non-uniform scaling requires logic in shader if normals aren't adjusted
+  folder.add(obj.scale, "1", 0.1, 5).name("Scale Y");
+  folder.add(obj.scale, "2", 0.1, 5).name("Scale Z");
+  folder.add(obj, "shininess", 1, 100);
+  folder.add(obj, "visible");
+}
+
+function addGuiForLight(light) {
+  const folder = gui.folders.lights.addFolder(light.name);
+
+  folder.add(light.position, "0", -10, 10).name("Pos X");
+  folder.add(light.position, "1", -10, 10).name("Pos Y");
+  folder.add(light.position, "2", -10, 10).name("Pos Z");
+  folder.addColor(light, "color");
+  folder.add(light, "intensity", 0, 10);
+  folder.add(light, "linear", 0, 1);
+  folder.add(light, "quadratic", 0, 1);
+}
+
+// --- RENDER LOOP ---
+
+function drawScene(currentTime) {
+  currentTime *= 0.001;
+
+  gl.clearColor(0.2, 0.2, 0.2, 1.0);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  gl.useProgram(program);
 
   const { mat4 } = glMatrix;
-  const projectionMatrix = mat4.create();
-  const viewMatrix = mat4.create();
-  const modelMatrix = mat4.create();
-  const mvpMatrix = mat4.create();
 
-  let lastTime = 0;
+  // 1. Camera & Matrix Setup
+  const projection = mat4.create();
+  const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+  mat4.perspective(projection, (45 * Math.PI) / 180, aspect, 0.1, 100.0);
 
-  ObjLoader.load(gl, "models/monkey_head.obj")
-    .then((mesh) => {
-      loadedModel = mesh;
-      console.log("Model loaded!");
-    })
-    .catch((err) => console.error(err));
+  const view = mat4.create();
+  mat4.lookAt(view, state.cameraPos, [0, 0, 0], [0, 1, 0]);
 
-  function drawScene(currentTime) {
-    currentTime *= 0.001; // convert to seconds
-    const deltaTime = currentTime - lastTime;
-    lastTime = currentTime;
+  // Send Globals
+  const loc = (name) => gl.getUniformLocation(program, name);
 
-    // Clear Screen
-    gl.clearColor(0.2, 0.2, 0.2, 1.0);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  gl.uniformMatrix4fv(loc("u_projection"), false, projection);
+  gl.uniformMatrix4fv(loc("u_view"), false, view);
+  gl.uniform3fv(loc("u_viewPos"), state.cameraPos);
+  gl.uniform3fv(loc("u_ambientColor"), state.ambientColor);
 
-    gl.useProgram(program);
+  // Send Directional Light
+  gl.uniform3fv(loc("u_dirLight.direction"), state.dirLight.direction);
+  gl.uniform3fv(loc("u_dirLight.color"), state.dirLight.color);
+  gl.uniform1f(loc("u_dirLight.intensity"), state.dirLight.intensity);
 
-    const { mat4, vec3 } = glMatrix;
+  // Send Point Lights (Array)
+  gl.uniform1i(loc("u_numPointLights"), state.pointLights.length);
 
-    // Projection
-    const projection = mat4.create();
-    const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
-    mat4.perspective(projection, (45 * Math.PI) / 180, aspect, 0.1, 100.0);
-    gl.uniformMatrix4fv(locs.projection, false, projection);
+  state.pointLights.forEach((light, i) => {
+    gl.uniform3fv(loc(`u_pointLights[${i}].position`), light.position);
+    gl.uniform3fv(loc(`u_pointLights[${i}].color`), light.color);
+    gl.uniform1f(loc(`u_pointLights[${i}].intensity`), light.intensity);
+    gl.uniform1f(loc(`u_pointLights[${i}].constant`), light.constant);
+    gl.uniform1f(loc(`u_pointLights[${i}].linear`), light.linear);
+    gl.uniform1f(loc(`u_pointLights[${i}].quadratic`), light.quadratic);
 
-    // View (Camera)
-    const view = mat4.create();
-    mat4.lookAt(view, state.cameraPos, [0, 0, 0], [0, 1, 0]);
-    gl.uniformMatrix4fv(locs.view, false, view);
-    gl.uniform3fv(locs.viewPos, state.cameraPos);
-
-    // Lighting Uniforms
-    gl.uniform3fv(locs.ambientColor, state.ambientColor);
-    gl.uniform1f(locs.shininess, state.material.shininess);
-
-    // Directional
-    gl.uniform3fv(locs.dirDir, state.dirLight.direction);
-    gl.uniform3fv(locs.dirColor, state.dirLight.color);
-    gl.uniform1f(locs.dirInt, state.dirLight.intensity);
-
-    // Point
-    gl.uniform3fv(locs.pointPos, state.pointLight.position);
-    gl.uniform3fv(locs.pointColor, state.pointLight.color);
-    gl.uniform1f(locs.pointInt, state.pointLight.intensity);
-    gl.uniform1f(locs.pointConst, state.pointLight.constant);
-    gl.uniform1f(locs.pointLin, state.pointLight.linear);
-    gl.uniform1f(locs.pointQuad, state.pointLight.quadratic);
-
-    // --- B. Draw Objects ---
-
-    boxTexture.bind(0);
-    gl.uniform1i(locs.texture, 0);
-
-    // 1. Draw Cube (Controlled by GUI)
-    const modelCube = mat4.create();
-    mat4.translate(modelCube, modelCube, state.cube.position);
-    mat4.rotateX(modelCube, modelCube, state.cube.rotation[0]);
-    mat4.rotateY(modelCube, modelCube, state.cube.rotation[1]);
-    mat4.scale(modelCube, modelCube, state.cube.scale);
-
-    gl.uniformMatrix4fv(locs.model, false, modelCube);
-    cubeMesh.draw();
-
-    // 2. Draw Sphere (Represents the Point Light Source)
-    // We draw this unlit or simply use the same shader but positioned at the light's location
+    // Visualize Light Bulb
     const modelLight = mat4.create();
-    mat4.translate(modelLight, modelLight, state.pointLight.position);
-    mat4.scale(modelLight, modelLight, [0.2, 0.2, 0.2]); // Small sphere
-    gl.uniformMatrix4fv(locs.model, false, modelLight);
-    sphereMesh.draw();
+    mat4.translate(modelLight, modelLight, light.position);
+    mat4.scale(modelLight, modelLight, [0.2, 0.2, 0.2]);
 
-    requestAnimationFrame(drawScene);
-  }
+    gl.uniformMatrix4fv(loc("u_model"), false, modelLight);
+    gl.uniform1f(loc("u_material.shininess"), 1.0);
+    sphereMesh.draw();
+  });
+
+  // 2. Render Scene Objects
+  state.objects.forEach((obj) => {
+    if (!obj.visible) return;
+
+    if (obj.texture) {
+      obj.texture.bind(0);
+      gl.uniform1i(loc("u_texture"), 0);
+    }
+
+    const model = mat4.create();
+    mat4.translate(model, model, obj.position);
+    mat4.rotateX(model, model, obj.rotation[0]);
+    mat4.rotateY(model, model, obj.rotation[1]);
+    mat4.rotateZ(model, model, obj.rotation[2]);
+    mat4.scale(model, model, obj.scale);
+
+    gl.uniformMatrix4fv(loc("u_model"), false, model);
+    gl.uniform1f(loc("u_material.shininess"), obj.shininess);
+
+    obj.mesh.draw();
+  });
 
   requestAnimationFrame(drawScene);
 }
