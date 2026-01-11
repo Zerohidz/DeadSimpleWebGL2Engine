@@ -1,7 +1,8 @@
 "use strict";
 
 // --- GLOBALS ---
-let gl, program;
+let gl, phongProgram, toonProgram, program;
+let activeShader = "phong";
 let defaultTexture;
 let gui;
 let sphereMesh, cubeMesh, cylinderMesh, hexagonalPrismMesh, triangularPrismMesh;
@@ -82,9 +83,16 @@ async function main() {
   resizeCanvas();
   initInput(canvas);
 
-  const vsSource = document.getElementById("vertex-shader").text.trim();
-  const fsSource = document.getElementById("fragment-shader").text.trim();
-  program = createProgram(gl, vsSource, fsSource);
+  const [phongVS, phongFS, toonVS, toonFS] = await Promise.all([
+    fetch('shaders/phong.vert').then(r => r.text()),
+    fetch('shaders/phong.frag').then(r => r.text()),
+    fetch('shaders/toon.vert').then(r => r.text()),
+    fetch('shaders/toon.frag').then(r => r.text())
+  ]);
+
+  phongProgram = createProgram(gl, phongVS, phongFS);
+  toonProgram = createProgram(gl, toonVS, toonFS);
+  program = phongProgram; // Start with Phong
 
   // Enable depth testing and backface culling for performance
   gl.enable(gl.DEPTH_TEST);
@@ -354,6 +362,14 @@ function initGUI() {
   };
   folderGlobal.add(tmp, "loadDemoSceneBtn").name("Load Demo Scene Assets");
 
+  // Shader selection dropdown
+  folderGlobal.add({ shader: 'phong' }, 'shader', ['phong', 'toon'])
+      .name('Active Shader')
+      .onChange((value) => {
+        activeShader = value;
+        program = value === 'phong' ? phongProgram : toonProgram;
+      });
+
   const inputControlFolder = gui.addFolder("Input Control");
   inputControlFolder
     .add(state, "activeControl", {
@@ -484,6 +500,9 @@ function drawScene(currentTime) {
 
   const fpsElem = document.getElementById("fps");
   if (fpsElem) fpsElem.textContent = Math.round(1 / dt);
+
+  const shaderElem = document.getElementById('shader-name');
+  if (shaderElem) shaderElem.textContent = activeShader === 'phong' ? 'Phong' : 'Toon';
 
   const w = gl.canvas.width;
   const h = gl.canvas.height;
