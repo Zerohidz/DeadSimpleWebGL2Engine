@@ -1,10 +1,12 @@
-# Flocking Frenzy - 5 Day Implementation Plan
+# Flocking Frenzy - 6 Day Implementation Plan (Day 0 + 5 Days)
 
 **Project:** DeadSimpleWebGL2Engine → Flocking Frenzy  
 **Team Size:** 4 developers  
-**Timeline:** 5 days total (January 10-15, 2026)  
+**Timeline:** 6 days total (January 10-15, 2026)  
+  - **Day 0 (Jan 10):** Refactoring & Architecture 🔧
+  - **Day 1-5 (Jan 11-15):** Feature Implementation & Delivery
 **Final Deadline:** January 15, 2026 (Presentation + Demo Video)  
-**Strategy:** BBM414 requirements → Boids gameplay → Polish
+**Strategy:** Refactor foundation → BBM414 requirements → Boids gameplay → Polish
 
 > **📌 IMPORTANT NOTE:**  
 > This project builds upon an existing WebGL2 engine codebase from a previous project.  
@@ -15,7 +17,8 @@
 
 ## 📋 Quick Navigation
 
-- [Day 1: Critical Shader Requirements](#day-1-critical-shader-requirements-jan-11)
+- [Day 0: Refactoring & Architecture](#day-0-refactoring--architecture-jan-10) ← **FOUNDATION DAY**
+- [Day 1: Infrastructure & Critical Requirements](#day-1-infrastructure--critical-requirements-jan-11)
 - [Day 2: BBM414 Mandatory Features](#day-2-bbm414-mandatory-features-jan-12)
 - [Day 3: Boids Core Gameplay](#day-3-boids-core-gameplay-jan-13)
 - [Day 4: Inventory, Scoring & Polish](#day-4-inventory-scoring--level-system-jan-14)
@@ -48,11 +51,16 @@
 
 ```
 main (protected, always deployable)
-├── day1-shaders
-│   ├── feature/underwater-shader
-│   ├── feature/spotlight-implementation
-│   └── feature/glsl-separation
+├── day0-refactoring
+│   ├── feature/modularize-architecture
+│   ├── feature/declarative-gui
+│   └── feature/code-quality
+├── day1-infrastructure
+│   ├── feature/glsl-file-separation
+│   ├── feature/shader-manager
+│   └── feature/spotlight-implementation
 ├── day2-mandatory-features
+│   ├── feature/underwater-shader
 │   ├── feature/help-menu
 │   └── feature/name-scene
 ├── day3-boids
@@ -79,6 +87,7 @@ Format: `[TYPE] Brief description (#issue-number)`
 
 **Example:**
 ```bash
+git commit -m "[REFACTOR] Extract Camera into separate module"
 git commit -m "[SHADER] Add underwater NPR fragment shader"
 git commit -m "[FEAT] Implement boids separation behavior"
 git commit -m "[FIX] Correct spotlight cone angle calculation"
@@ -86,7 +95,233 @@ git commit -m "[FIX] Correct spotlight cone angle calculation"
 
 ---
 
-## Day 1: Critical Shader Requirements (Jan 11)
+## Day 0: Refactoring & Architecture (Jan 10)
+
+**Goal:** Establish solid foundation for parallel development, improve code maintainability
+
+> **⚠️ WHY REFACTOR FIRST?**  
+> The current codebase is monolithic (`main.js` ~800+ lines). Day 0 refactoring:  
+> - Prevents merge conflicts (4 devs working in parallel)  
+> - Improves code readability and debugging  
+> - Creates clear module boundaries  
+> - Enables easier feature testing
+
+### Morning Session (4 hours)
+
+#### Task 0.1: Code Analysis & Planning [All Devs] (1 hour)
+**Steps:**
+- [ ] Review current `main.js` structure
+- [ ] Identify logical modules: Camera, Scene, Renderer, Lighting, Input
+- [ ] Discuss module interfaces and responsibilities
+- [ ] Assign refactoring tasks to developers
+
+**Acceptance Criteria:**
+- ✅ Team alignment on architecture
+- ✅ Clear module boundaries defined
+
+---
+
+#### Task 0.2: Modularize Camera System [Dev 2] (3 hours)
+**Current:** Camera logic scattered in `main.js`  
+**Target:** `src/Camera.js` module
+
+**Steps:**
+- [ ] Create `src/` directory
+- [ ] Create `src/Camera.js`:
+```javascript
+export class Camera {
+    constructor(canvas) {
+        this.mode = 'fps'; // 'fps', 'orbit', 'static'
+        this.position = vec3.fromValues(0, 0, 5);
+        this.rotation = { pitch: 0, yaw: 0 };
+        this.fov = 60;
+        // ... fps settings, orbit settings
+    }
+    
+    update(deltaTime) {
+        if (this.mode === 'fps') this.updateFPS(deltaTime);
+        else if (this.mode === 'orbit') this.updateOrbit();
+    }
+    
+    getViewMatrix() {
+        // Calculate view matrix based on mode
+    }
+    
+    getProjectionMatrix(aspect) {
+        // Calculate projection matrix
+    }
+}
+```
+- [ ] Extract FPS controls (WASD, mouse look)
+- [ ] Extract Orbit controls (theta, phi, radius)
+- [ ] Test: Ensure camera controls still work
+
+**Acceptance Criteria:**
+- ✅ `Camera.js` module created
+- ✅ No regressions in camera behavior
+- ✅ Code reduced in `main.js`
+
+**Priority:** 🟡 High (enables parallel work)
+
+---
+
+### Afternoon Session (4 hours)
+
+#### Task 0.3: Modularize Scene Management [Dev 3] (2 hours)
+**Target:** `src/Scene.js` module
+
+**Steps:**
+- [ ] Create `src/Scene.js`:
+```javascript
+export class Scene {
+    constructor() {
+        this.objects = [];
+        this.lights = {
+            directional: null,
+            points: [],
+            spotlight: null // For Day 1
+        };
+        this.ambientColor = [0.2, 0.2, 0.2];
+    }
+    
+    addObject(obj) { this.objects.push(obj); }
+    removeObject(id) { /* ... */ }
+    getObject(id) { /* ... */ }
+    
+    addLight(type, light) { /* ... */ }
+    
+    update(deltaTime) {
+        // Update dynamic objects (Day 3: boids)
+    }
+}
+```
+- [ ] Move `state.objects`, `state.lights` to Scene
+- [ ] Test: Object addition/removal still works
+
+**Acceptance Criteria:**
+- ✅ `Scene.js` created
+- ✅ Scene state centralized
+
+---
+
+#### Task 0.4: Modularize Renderer [Dev 1] (2 hours)
+**Target:** `src/Renderer.js` module
+
+**Steps:**
+- [ ] Create `src/Renderer.js`:
+```javascript
+export class Renderer {
+    constructor(gl, canvas) {
+        this.gl = gl;
+        this.canvas = canvas;
+        this.activeShader = null;
+        this.shaderPrograms = {}; // For Day 1: multiple shaders
+    }
+    
+    loadShader(name, vertSrc, fragSrc) { /* ... */ }
+    useShader(name) { /* ... */ }
+    
+    render(scene, camera) {
+        // Main render loop
+        const viewMatrix = camera.getViewMatrix();
+        const projMatrix = camera.getProjectionMatrix(aspect);
+        
+        for (let obj of scene.objects) {
+            this.renderObject(obj, viewMatrix, projMatrix, scene.lights);
+        }
+    }
+    
+    renderObject(obj, view, proj, lights) { /* ... */ }
+}
+```
+- [ ] Extract draw call logic
+- [ ] Test: Rendering still works
+
+**Acceptance Criteria:**
+- ✅ `Renderer.js` created
+- ✅ Render loop cleaner
+
+---
+
+#### Task 0.5: Declarative GUI System [Dev 4] (2 hours)
+**Current:** GUI code scattered, imperative  
+**Target:** Declarative config-based GUI
+
+**Steps:**
+- [ ] Create `src/GUI.js`:
+```javascript
+export class GUI {
+    constructor(lil) {
+        this.gui = lil;
+        this.controllers = {};
+    }
+    
+    addPanel(config) {
+        // Config-based panel creation
+        // Example:
+        // { name: 'Camera', fields: [
+        //   { type: 'slider', label: 'FOV', min: 10, max: 120, ... }
+        // ]}
+    }
+    
+    updatePanel(name, newConfig) { /* ... */ }
+}
+```
+- [ ] Refactor existing lil-gui code to use declarative approach
+- [ ] Test: GUI panels still work
+
+**Acceptance Criteria:**
+- ✅ GUI code more maintainable
+- ✅ Easy to add new controls (for Day 1-4 features)
+
+---
+
+#### Task 0.6: Code Quality Improvements [All Devs] (1 hour)
+**Steps:**
+- [ ] Add JSDoc comments to new modules
+- [ ] Remove dead code (commented-out sections)
+- [ ] Consistent naming conventions
+- [ ] Add `src/utils.js` for shared helpers
+
+**Acceptance Criteria:**
+- ✅ Code passes basic linting (if used)
+- ✅ Modules documented
+
+---
+
+### End of Day 0 Checklist
+- [ ] `src/Camera.js` module created
+- [ ] `src/Scene.js` module created
+- [ ] `src/Renderer.js` module created
+- [ ] `src/GUI.js` module created
+- [ ] `main.js` reduced to ~200 lines (orchestration only)
+- [ ] All existing features still work (no regressions)
+- [ ] Git commits: `[REFACTOR] Extract Camera module`, `[REFACTOR] Extract Scene module`, etc.
+
+> **📌 IMPORTANT:**  
+> By end of Day 0, `main.js` should look like:
+> ```javascript
+> import { Camera } from './src/Camera.js';
+> import { Scene } from './src/Scene.js';
+> import { Renderer } from './src/Renderer.js';
+> import { GUI } from './src/GUI.js';
+> 
+> const camera = new Camera(canvas);
+> const scene = new Scene();
+> const renderer = new Renderer(gl, canvas);
+> const gui = new GUI(lil);
+> 
+> function animate(time) {
+>     camera.update(deltaTime);
+>     scene.update(deltaTime);
+>     renderer.render(scene, camera);
+>     requestAnimationFrame(animate);
+> }
+> ```
+
+---
+
+## Day 1: Infrastructure & Critical Requirements (Jan 11)
 
 **Goal:** Complete BBM414's most critical requirement: 2+ distinct shader programs
 
